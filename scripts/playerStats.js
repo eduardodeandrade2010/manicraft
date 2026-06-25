@@ -3,12 +3,13 @@
 
 export class PlayerStats {
   constructor(onDeath) {
-    this.health = 100;
-    this.maxHealth = 100;
+    this.health = 200;
+    this.maxHealth = 200;
     this.dead = false;
     this.onDeath = onDeath;
     this.regenAccum = 0;
     this.sinceHit = 0;
+    this.lastFrom = null;
     this.#buildUI();
     this.#render();
   }
@@ -39,6 +40,14 @@ export class PlayerStats {
     dead.textContent = 'YOU DIED';
     document.body.appendChild(dead);
     this.deadEl = dead;
+
+    // "Hit by X" flash near the crosshair.
+    const hit = document.createElement('div');
+    hit.style.cssText =
+      'position:fixed;left:50%;top:58%;transform:translateX(-50%);z-index:50;pointer-events:none;' +
+      'font-family:monospace;font-size:15px;color:#ff8a8a;text-shadow:0 1px 3px #000;opacity:0;transition:opacity .15s';
+    document.body.appendChild(hit);
+    this.hitEl = hit;
   }
 
   #render() {
@@ -47,18 +56,26 @@ export class PlayerStats {
     this.vignette.style.opacity = String(Math.min(0.9, (1 - pct) * 0.9 + (this.sinceHit < 0.3 ? 0.4 : 0)));
   }
 
-  damage(d) {
+  damage(d, from) {
     if (this.dead) return;
     this.health -= d;
     this.sinceHit = 0;
+    if (from) {
+      this.lastFrom = from;
+      this.hitEl.textContent = '−' + d + (from ? '  ' + from : '');
+      this.hitEl.style.opacity = '1';
+      clearTimeout(this._hitTimer);
+      this._hitTimer = setTimeout(() => (this.hitEl.style.opacity = '0'), 700);
+    }
     if (this.health <= 0) {
       this.health = 0;
       this.dead = true;
       this.deadEl.style.display = 'flex';
+      const killer = this.lastFrom;
       setTimeout(() => {
         this.deadEl.style.display = 'none';
         this.reset();
-        this.onDeath?.();
+        this.onDeath?.(killer);
       }, 1500);
     }
     this.#render();

@@ -63,9 +63,10 @@ const wildlife = new Wildlife(scene, world);
 
 // Audio, player health, sniper rifle.
 const audio = new GameAudio();
-const playerStats = new PlayerStats(() => {
-  player.position.set(0, 40, 0);
+const playerStats = new PlayerStats((killer) => {
+  player.position.set(0, 50, 0);
   player.velocity.set(0, 0, 0);
+  if (mp && myProfile) mp.sendDown(myProfile.name, killer);
 });
 const weapon = new Weapon(scene, player, world, wildlife, audio);
 wildlife.onPlayerHit = (d) => {
@@ -91,6 +92,7 @@ window.__mc = { world, player, wildlife, scene, weapon, stats: playerStats };
 
 // Online state (set after onboarding).
 let mp = null;
+let myProfile = null;
 let posTimer = 0;
 
 /** Apply a block edit received from another player (no echo back).
@@ -220,6 +222,7 @@ animate();
 // Onboarding: pick name + photo, then drop straight into the shared online world.
 const onboarding = new Onboarding(async (profile) => {
   window.__mc.profile = profile;
+  myProfile = profile;
   mp = new Multiplayer(scene, profile);
   window.__mp = mp;
 
@@ -240,10 +243,11 @@ const onboarding = new Onboarding(async (profile) => {
   world.generate();
 
   mp.onRemoteEdit = (e) => applyRemoteEdit(e);
-  mp.onDamaged = (dmg) => {
-    playerStats.damage(dmg);
+  mp.onDamaged = (dmg, from) => {
+    playerStats.damage(dmg, from);
     audio.playerHurt();
   };
+  mp.onPlayerDown = (p) => mp.feed('☠ ' + (p?.name || 'Player') + (p?.by ? '  ✕ ' + p.by : ''));
   weapon.multiplayer = mp;
   await mp.connect();
 

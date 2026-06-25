@@ -18,8 +18,29 @@ export class Multiplayer {
     this.channel = null;
     this.onDamaged = null;
     this.onRemoteEdit = null;
+    this.onPlayerDown = null;
     this._tmp = new THREE.Vector3();
     this._to = new THREE.Vector3();
+
+    // PvP kill feed.
+    const feed = document.createElement('div');
+    feed.style.cssText =
+      'position:fixed;right:16px;top:54px;z-index:50;display:flex;flex-direction:column;gap:4px;align-items:flex-end;' +
+      'font-family:monospace;font-size:14px;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none';
+    document.body.appendChild(feed);
+    this.feedEl = feed;
+  }
+
+  feed(text) {
+    const row = document.createElement('div');
+    row.style.cssText = 'background:rgba(120,10,10,0.6);border-radius:6px;padding:3px 9px;opacity:1;transition:opacity .5s';
+    row.textContent = text;
+    this.feedEl.appendChild(row);
+    setTimeout(() => {
+      row.style.opacity = '0';
+      setTimeout(() => row.remove(), 500);
+    }, 3500);
+    while (this.feedEl.children.length > 5) this.feedEl.firstChild.remove();
   }
 
   async connect() {
@@ -32,6 +53,9 @@ export class Multiplayer {
     });
     ch.on('broadcast', { event: 'edit' }, ({ payload }) => {
       if (this.onRemoteEdit) this.onRemoteEdit(payload);
+    });
+    ch.on('broadcast', { event: 'down' }, ({ payload }) => {
+      if (this.onPlayerDown) this.onPlayerDown(payload);
     });
     ch.on('presence', { event: 'sync' }, () => this.#sync());
     ch.on('presence', { event: 'leave' }, ({ leftPresences }) => {
@@ -88,6 +112,9 @@ export class Multiplayer {
   }
   sendEdit(e) {
     this.channel?.send({ type: 'broadcast', event: 'edit', payload: e });
+  }
+  sendDown(name, by) {
+    this.channel?.send({ type: 'broadcast', event: 'down', payload: { name, by } });
   }
 
   update(dt) {
