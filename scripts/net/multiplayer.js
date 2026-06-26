@@ -87,7 +87,9 @@ export class Multiplayer {
     const group = createAvatar(meta.name, photo);
     group.position.set(0, -999, 0);
     this.scene.add(group);
-    this.players.set(meta.id, { group, target: new THREE.Vector3(0, 40, 0), yaw: 0, name: meta.name });
+    // live=false until a real position arrives, so the default-spawn avatar is
+    // never shootable (prevents "phantom" hits near the origin).
+    this.players.set(meta.id, { group, target: new THREE.Vector3(0, -999, 0), yaw: 0, name: meta.name, live: false });
   }
 
   #remove(id) {
@@ -100,8 +102,10 @@ export class Multiplayer {
     if (!p || p.id === this.localId) return;
     const pl = this.players.get(p.id);
     if (!pl || !pl.group) return;
+    if (!pl.live) pl.group.position.set(p.x, p.y - 1.62, p.z); // snap on first real pos
     pl.target.set(p.x, p.y, p.z);
     pl.yaw = p.yaw || 0;
+    pl.live = true;
   }
 
   sendPos(x, y, z, yaw) {
@@ -131,7 +135,7 @@ export class Multiplayer {
     let best = null;
     let bt = maxT;
     for (const [id, pl] of this.players) {
-      if (!pl.group) continue;
+      if (!pl.group || !pl.live) continue; // only players with a known real position
       this._tmp.copy(pl.group.position);
       this._tmp.y += 1.4; // chest
       const tox = this._tmp.x - origin.x;
@@ -143,7 +147,7 @@ export class Multiplayer {
       const py = toy - dir.y * t;
       const pz = toz - dir.z * t;
       const perp = Math.sqrt(px * px + py * py + pz * pz);
-      if (perp < 0.85) {
+      if (perp < 0.6) {
         const hitY = origin.y + dir.y * t;
         best = { id, t, head: hitY > pl.group.position.y + 1.75 };
         bt = t;

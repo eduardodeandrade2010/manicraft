@@ -16,6 +16,7 @@ import { GameAudio } from './audio';
 import { DayNight } from './daynight';
 import { PlayerStats } from './playerStats';
 import { Hotbar } from './hotbar';
+import { Grenades } from './grenade';
 import { updateWater } from './water';
 import { Onboarding } from './ui/onboarding';
 import { Multiplayer } from './net/multiplayer';
@@ -74,8 +75,11 @@ wildlife.onPlayerHit = (d) => {
   audio.playerHurt();
 };
 
-// Unified hotbar: scroll wheel / 0-9 to switch pickaxe, blocks, and the rifle.
-const hotbar = new Hotbar(player, weapon);
+// Throwable grenade (hotbar slot 8).
+const grenade = new Grenades(scene, player, world, wildlife, playerStats, audio);
+
+// Unified hotbar: scroll / 0-9 to switch pickaxe, blocks, grenade (8), rifle (9).
+const hotbar = new Hotbar(player, weapon, grenade);
 
 // Browsers require a user gesture before audio can start.
 const resumeAudio = () => audio.resume();
@@ -88,7 +92,7 @@ renderer.domElement.addEventListener('click', () => {
 });
 
 // Debug hook (harmless): inspect/drive from the console.
-window.__mc = { world, player, wildlife, scene, weapon, stats: playerStats };
+window.__mc = { world, player, wildlife, scene, weapon, grenade, stats: playerStats };
 
 // Online state (set after onboarding).
 let mp = null;
@@ -190,8 +194,9 @@ function animate() {
     controls.target.copy(player.position);
   }
 
-  // Weapon effects + animated water + remote avatars update every frame.
+  // Weapon + grenade effects + animated water + remote avatars update every frame.
   weapon.update(dt);
+  grenade.update(dt);
   updateWater(currentTime / 1000);
   if (mp) mp.update(dt);
 
@@ -249,6 +254,7 @@ const onboarding = new Onboarding(async (profile) => {
   };
   mp.onPlayerDown = (p) => mp.feed('☠ ' + (p?.name || 'Player') + (p?.by ? '  ✕ ' + p.by : ''));
   weapon.multiplayer = mp;
+  grenade.multiplayer = mp;
   await mp.connect();
 
   player.position.set(0, 50, 0);

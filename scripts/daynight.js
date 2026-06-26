@@ -12,12 +12,16 @@ const DAY_SUN = new THREE.Color(0xfff4e0);
 const DUSK_SUN = new THREE.Color(0xff8a4a);
 
 export class DayNight {
-  constructor(scene, sun, ambient, dayLength = 140) {
+  constructor(scene, sun, ambient) {
     this.scene = scene;
     this.sun = sun;
     this.ambient = ambient;
-    this.dayLength = dayLength;
-    this.t = 0.28; // start mid-morning
+    // Asymmetric cycle: long days, short nights. The t-curve still spends half
+    // its range in daylight (t 0.25..0.75) and half at night — we just advance
+    // t slower during the day half and faster during the night half.
+    this.dayLength = 600; // 10 minutes of daylight
+    this.nightLength = 60; // 1 minute of night
+    this.t = 0.3; // start mid-morning
     this._sky = new THREE.Color();
     this._fog = new THREE.Color();
   }
@@ -32,7 +36,12 @@ export class DayNight {
   }
 
   update(dt, playerPos) {
-    this.t = (this.t + dt / this.dayLength) % 1;
+    // Day half = t in [0.25, 0.75]; night half = the rest. Each half spans 0.5
+    // of the t range; advance it so the day half lasts dayLength and the night
+    // half lasts nightLength.
+    const inDayHalf = this.t >= 0.25 && this.t < 0.75;
+    const speed = 0.5 / (inDayHalf ? this.dayLength : this.nightLength);
+    this.t = (this.t + dt * speed) % 1;
     const e = this.elevation; // -1..1
 
     // Sun orbits around the player on a tilted arc.

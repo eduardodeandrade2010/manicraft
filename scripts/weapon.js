@@ -175,10 +175,9 @@ export class Weapon {
     while (this.killFeedEl.children.length > 5) this.killFeedEl.firstChild.remove();
   }
 
-  /** Equip/holster the rifle (driven by the hotbar). */
+  /** Equip/holster the rifle (driven by the hotbar; the hotbar owns __weaponActive). */
   equip(on) {
     this.active = on;
-    window.__weaponActive = on;
     this.gun.visible = on;
     this.hud.style.display = on ? 'block' : 'none';
     if (!on) this.setAim(false);
@@ -222,10 +221,11 @@ export class Weapon {
       }
     }
 
-    // PvP: nearest remote player along the ray (before any block/creature).
+    // PvP: nearest remote player along the ray, occluded by blocks/creatures and
+    // capped to 100 blocks so you can't tag someone across the whole map.
     let playerHit = null;
     if (this.multiplayer) {
-      playerHit = this.multiplayer.raycastPlayers(origin, dir, Math.min(tBlock, creHit ? tCre : Infinity));
+      playerHit = this.multiplayer.raycastPlayers(origin, dir, Math.min(tBlock, creHit ? tCre : Infinity, 100));
     }
 
     let hitPoint;

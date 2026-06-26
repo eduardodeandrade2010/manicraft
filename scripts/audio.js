@@ -109,4 +109,17 @@ export class GameAudio {
     if (!this.ctx) return;
     this.#tone(660, 0.05, 0.2, 'square');
   }
+
+  pin() {
+    if (!this.ctx) return;
+    this.#tone(900, 0.04, 0.2, 'square');
+    this.#tone(1300, 0.04, 0.15, 'square');
+  }
+
+  explosion() {
+    if (!this.ctx) return;
+    this.#tone(90, 0.5, 0.7, 'sawtooth', 40); // deep boom
+    this.#noise(0.6, 500, 0.4, 0.6, 'lowpass'); // blast
+    this.#noise(0.9, 200, 0.3, 0.3, 'lowpass'); // rumble
+  }
 }
