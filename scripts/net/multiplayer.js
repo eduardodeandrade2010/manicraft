@@ -19,6 +19,7 @@ export class Multiplayer {
     this.onDamaged = null;
     this.onRemoteEdit = null;
     this.onPlayerDown = null;
+    this.onExplode = null;
     this._tmp = new THREE.Vector3();
     this._to = new THREE.Vector3();
 
@@ -56,6 +57,9 @@ export class Multiplayer {
     });
     ch.on('broadcast', { event: 'down' }, ({ payload }) => {
       if (this.onPlayerDown) this.onPlayerDown(payload);
+    });
+    ch.on('broadcast', { event: 'explode' }, ({ payload }) => {
+      if (this.onExplode) this.onExplode(payload);
     });
     ch.on('presence', { event: 'sync' }, () => this.#sync());
     ch.on('presence', { event: 'leave' }, ({ leftPresences }) => {
@@ -119,6 +123,9 @@ export class Multiplayer {
   }
   sendDown(name, by) {
     this.channel?.send({ type: 'broadcast', event: 'down', payload: { name, by } });
+  }
+  sendExplode(pos) {
+    this.channel?.send({ type: 'broadcast', event: 'explode', payload: { x: pos.x, y: pos.y, z: pos.z } });
   }
 
   update(dt) {

@@ -201,7 +201,27 @@ function animate() {
   if (mp) mp.update(dt);
 
   renderPass.camera = player.controls.isLocked ? player.camera : orbitCamera;
+
+  // Screen shake from explosions — offset the camera only for this render, then
+  // restore it so the player's physics position is untouched.
+  let sox = 0, soy = 0, soz = 0;
+  if (grenade.shake > 0 && player.controls.isLocked) {
+    const s = grenade.shake;
+    sox = (Math.random() - 0.5) * s;
+    soy = (Math.random() - 0.5) * s;
+    soz = (Math.random() - 0.5) * s;
+    player.camera.position.x += sox;
+    player.camera.position.y += soy;
+    player.camera.position.z += soz;
+  }
+
   composer.render();
+
+  if (sox || soy || soz) {
+    player.camera.position.x -= sox;
+    player.camera.position.y -= soy;
+    player.camera.position.z -= soz;
+  }
   stats.update();
 
   previousTime = currentTime;
@@ -255,6 +275,7 @@ const onboarding = new Onboarding(async (profile) => {
   mp.onPlayerDown = (p) => mp.feed('☠ ' + (p?.name || 'Player') + (p?.by ? '  ✕ ' + p.by : ''));
   weapon.multiplayer = mp;
   grenade.multiplayer = mp;
+  mp.onExplode = (p) => grenade.feelExplosion(new THREE.Vector3(p.x, p.y, p.z));
   await mp.connect();
 
   player.position.set(0, 50, 0);

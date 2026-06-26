@@ -26,6 +26,7 @@ export class Grenades {
     this.cooldown = 0;
     this.grenades = [];
     this.particles = [];
+    this.shake = 0; // screen-shake magnitude (applied at render time in main)
 
     this.geo = new THREE.SphereGeometry(0.18, 12, 12);
     this.mat = new THREE.MeshLambertMaterial({ color: 0x3c5a2e });
@@ -99,6 +100,7 @@ export class Grenades {
 
   update(dt) {
     if (this.cooldown > 0) this.cooldown -= dt;
+    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 2.5);
 
     // Trajectory preview while held.
     if (this.equipped) this.#preview();
@@ -168,8 +170,6 @@ export class Grenades {
   }
 
   #explode(pos) {
-    this.audio?.explosion();
-
     // Crater: remove solid blocks within the radius (persisted + broadcast via removeBlock).
     const r = Math.ceil(RADIUS);
     const cx = Math.floor(pos.x);
@@ -189,29 +189,45 @@ export class Grenades {
       }
     }
 
-    // Damage with distance falloff.
+    // Damage with distance falloff — lethal up close.
+    const hurtR = RADIUS + 1.5;
     const dl = pos.distanceTo(this.player.position);
-    if (dl < RADIUS + 1) this.playerStats.damage(Math.max(1, Math.round((1 - dl / (RADIUS + 1)) * 70)), 'Granada');
+    if (dl < hurtR) this.playerStats.damage(Math.max(1, Math.round((1 - dl / hurtR) * 200)), 'Granada');
 
     if (this.multiplayer) {
       for (const [id, pl] of this.multiplayer.players) {
         if (!pl.group || !pl.live) continue;
         const d = pos.distanceTo(pl.group.position);
-        if (d < RADIUS + 1) this.multiplayer.sendHit(id, Math.max(1, Math.round((1 - d / (RADIUS + 1)) * 130)));
+        if (d < hurtR) this.multiplayer.sendHit(id, Math.max(1, Math.round((1 - d / hurtR) * 250)));
       }
     }
     if (this.wildlife) {
       const away = new THREE.Vector3();
       for (const c of this.wildlife.creatures) {
         const d = pos.distanceTo(c.group.position);
-        if (d < RADIUS + 1) {
+        if (d < hurtR) {
           away.copy(c.group.position).sub(pos).normalize();
-          c.hit(60, away);
+          c.hit(100, away);
         }
       }
     }
 
+    this.#fx(pos);
+    if (this.multiplayer) this.multiplayer.sendExplode(pos);
+  }
+
+  /** Sound + flash + debris + screen shake (scaled by distance to the player). */
+  #fx(pos) {
+    this.audio?.explosion();
     this.#boom(pos);
+    const dl = pos.distanceTo(this.player.position);
+    const intensity = Math.min(0.7, (1 - Math.min(1, dl / 40)) * 0.8 + 0.04);
+    this.shake = Math.max(this.shake, intensity);
+  }
+
+  /** Triggered by another player's grenade (damage/crater already arrive via the network). */
+  feelExplosion(pos) {
+    this.#fx(pos);
   }
 
   #boom(pos) {
