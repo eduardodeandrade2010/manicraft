@@ -1,9 +1,9 @@
 import { supabase } from './supabaseClient';
 
-// Player profile: a name + a small profile photo. Stored locally (so returning
-// players skip onboarding) and upserted to Supabase `profiles`. The photo is
-// downscaled to a tiny JPEG so it's cheap to store and to texture onto the
-// player's avatar head.
+// Player accounts: name + 4-digit PIN = register/login (no recovery — lose the
+// PIN, lose the account). Names are unique. The PIN never travels or is stored
+// in clear: we send a SHA-256 hash to a server-side function that does the
+// atomic register-or-login and never exposes the hash back to clients.
 
 const KEY = 'manicraft_profile';
 
@@ -15,23 +15,41 @@ export function loadLocalProfile() {
   }
 }
 
-export async function saveProfile(name, photoDataUrl) {
-  const existing = loadLocalProfile();
-  const id = existing?.id || (crypto.randomUUID ? crypto.randomUUID() : 'p_' + Math.random().toString(36).slice(2));
-  const profile = { id, name, photo: photoDataUrl || existing?.photo || null };
-  localStorage.setItem(KEY, JSON.stringify(profile));
-  try {
-    await supabase.from('profiles').upsert({ id, name: profile.name, photo: profile.photo });
-  } catch (e) {
-    console.warn('profile upsert failed', e);
+function saveLocal(p) {
+  localStorage.setItem(KEY, JSON.stringify(p));
+}
+
+async function sha256(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Register a new account or log into an existing one. Throws on wrong PIN. */
+export async function registerOrLogin(name, pin, photoDataUrl) {
+  const cleanName = name.trim().toLowerCase();
+  const hash = await sha256(cleanName + ':' + pin);
+  const { data, error } = await supabase.rpc('login_or_register', {
+    p_name: cleanName,
+    p_hash: hash,
+    p_photo: photoDataUrl || null,
+  });
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('NOME_OU_SENHA')) throw new Error('Esse nome já existe e a senha está errada.');
+    if (msg.includes('duplicate') || msg.includes('unique')) throw new Error('Esse nome acabou de ser registrado. Use outro nome.');
+    throw new Error('Falha no login: ' + msg);
   }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('Falha no login.');
+  const profile = { id: row.id, name: row.name, photo: row.photo || photoDataUrl || null };
+  saveLocal(profile);
   return profile;
 }
 
-/** Fetch another player's photo by id (for their avatar). */
+/** Fetch a player's photo by id (public view — no PIN exposure). */
 export async function fetchPhoto(id) {
   try {
-    const { data } = await supabase.from('profiles').select('photo').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('players_public').select('photo').eq('id', id).maybeSingle();
     return data?.photo || null;
   } catch {
     return null;

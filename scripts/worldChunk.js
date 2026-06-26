@@ -33,6 +33,7 @@ export class WorldChunk extends THREE.Group {
     const rng = new RNG(this.params.seed);
     this.initializeTerrain();
     this.generateTerrain(rng);
+    this.generateWaterfalls(rng);
     runStructures(this, rng, this.params.theme, (x, z) => this.columnSurface(x, z));
     this.generateClouds(rng);
     this.loadPlayerChanges();
@@ -97,6 +98,7 @@ export class WorldChunk extends THREE.Group {
    */
   generateTerrain(rng) {
     const simplex = new SimplexNoise(rng);
+    this.heights = Array.from({ length: this.size.width }, () => new Array(this.size.width).fill(0));
     for (let x = 0; x < this.size.width; x++) {
       for (let z = 0; z < this.size.width; z++) {
         const biome = this.getBiome(simplex, x, z);
@@ -114,8 +116,18 @@ export class WorldChunk extends THREE.Group {
         // Computing the height of the terrain at this x-z location
         let height = Math.floor(scaledNoise);
 
-        // Clamping height between 0 and max height
-        height = Math.max(0, Math.min(height, this.size.height - 1));
+        // Mesas with terraced, cliff-stepped edges → dramatic terrain + waterfalls.
+        const plateau = simplex.noise(
+          (this.position.x + x) / 80 + 100,
+          (this.position.z + z) / 80 + 100
+        );
+        if (plateau > 0.4) {
+          height = Math.floor((height + (plateau - 0.4) * 18) / 4) * 4;
+        }
+
+        // Clamping (leave headroom below the cloud layer).
+        height = Math.max(0, Math.min(height, this.size.height - 5));
+        this.heights[x][z] = height;
 
         // Fill in all blocks at or below the terrain height
         for (let y = this.size.height; y >= 0; y--) {
@@ -135,9 +147,11 @@ export class WorldChunk extends THREE.Group {
 
             this.setBlockId(x, y, z, groundBlockType);
 
-            // Randomly generate a tree
+            // Randomly generate a tree, or a flower on the grass.
             if (rng.random() < this.params.trees.frequency) {
               this.generateTree(rng, biome, x, height + 1, z);
+            } else if (groundBlockType === blocks.grass.id && height > this.params.terrain.waterOffset && rng.random() < 0.03) {
+              this.setBlockId(x, height + 1, z, rng.random() < 0.5 ? blocks.flowerRed.id : blocks.flowerYellow.id);
             }
           } else if (y < height && this.getBlock(x, y, z).id === blocks.empty.id) {
             // Carve caves underground with 3D noise (leaves the block as air).
@@ -147,7 +161,7 @@ export class WorldChunk extends THREE.Group {
                 y / 14,
                 (this.position.z + z) / 24
               );
-              if (cave > 0.55) continue;
+              if (cave > 0.5) continue;
             }
             this.generateResourceIfNeeded(simplex, x, y, z);
           }
@@ -157,11 +171,44 @@ export class WorldChunk extends THREE.Group {
   }
 
   /**
+   * Waterfalls: where the terrain drops sharply to a lower neighbour, pour a
+   * sheet of water down the cliff face for a more alive, scenic world.
+   */
+  generateWaterfalls(rng) {
+    if (!this.heights) return;
+    const W = this.size.width;
+    const sea = this.params.terrain.waterOffset;
+    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let x = 1; x < W - 1; x++) {
+      for (let z = 1; z < W - 1; z++) {
+        const h = this.heights[x][z];
+        if (h <= sea + 2) continue;
+        let minN = h;
+        let mx = x;
+        let mz = z;
+        for (const [dx, dz] of nb) {
+          const nh = this.heights[x + dx][z + dz];
+          if (nh < minN) {
+            minN = nh;
+            mx = x + dx;
+            mz = z + dz;
+          }
+        }
+        if (h - minN >= 4 && rng.random() < 0.06) {
+          for (let y = minN + 1; y <= h; y++) {
+            if (this.getBlock(mx, y, mz)?.id === blocks.empty.id) this.setBlockId(mx, y, mz, blocks.water.id);
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Determines if a resource block should be generated at (x, y, z)
-   * @param {SimplexNoise} simplex 
-   * @param {number} x 
-   * @param {number} y 
-   * @param {number} z 
+   * @param {SimplexNoise} simplex
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
    */
   generateResourceIfNeeded(simplex, x, y, z) {
     this.setBlockId(x, y, z, blocks.dirt.id);

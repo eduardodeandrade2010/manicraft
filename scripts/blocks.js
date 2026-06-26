@@ -167,6 +167,10 @@ export const blocks = {
   neon:         { id: 20, name: 'neon',         material: new THREE.MeshBasicMaterial({ color: 0x33fff0 }) },
   neonPink:     { id: 21, name: 'neonPink',     material: new THREE.MeshBasicMaterial({ color: 0xff36c6 }) },
   darkMetal:    { id: 22, name: 'darkMetal',    material: new THREE.MeshLambertMaterial({ color: 0x23262d }) },
+  // Flowing water (waterfalls) + flowers, for a livelier world.
+  water:        { id: 23, name: 'water',        material: new THREE.MeshLambertMaterial({ color: 0x3a78d0, transparent: true, opacity: 0.72 }) },
+  flowerRed:    { id: 24, name: 'flowerRed',    material: new THREE.MeshLambertMaterial({ color: 0xd2384a }) },
+  flowerYellow: { id: 25, name: 'flowerYellow', material: new THREE.MeshLambertMaterial({ color: 0xe8c23a }) },
 };
 
 // Color blocks the favela structures pick from for shack walls.

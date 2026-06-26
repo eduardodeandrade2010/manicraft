@@ -21,6 +21,9 @@ import { updateWater } from './water';
 import { Onboarding } from './ui/onboarding';
 import { Multiplayer } from './net/multiplayer';
 import { Persistence, loadOrCreateWorldSeed } from './net/persistence';
+import { supabase, WORLD_ID } from './net/supabaseClient';
+
+const ADMIN_NAME = 'fabinhodejesus';
 
 // UI Setup
 const stats = new Stats();
@@ -97,7 +100,48 @@ window.__mc = { world, player, wildlife, scene, weapon, grenade, stats: playerSt
 // Online state (set after onboarding).
 let mp = null;
 let myProfile = null;
+let persistence = null;
 let posTimer = 0;
+
+/** Regenerate the shared world from a fresh seed and wipe local edits (no reload). */
+function resetWorldLocal(seed) {
+  world.dataStore.clear();
+  if (persistence) persistence.chunks = {};
+  if (typeof seed === 'number') world.params.seed = seed;
+  world.generate(true);
+  wildlife.reset();
+  player.position.set(0, 50, 0);
+  player.velocity.set(0, 0, 0);
+}
+
+/** Admin-only: reset the world for EVERYONE (wipe builds + new seed) and broadcast it. */
+async function adminResetWorld() {
+  const seed = Math.floor(Math.random() * 1_000_000);
+  try {
+    await supabase.from('edits').delete().eq('world_id', WORLD_ID);
+    await supabase.from('worlds').update({ seed }).eq('id', WORLD_ID);
+  } catch (e) {
+    console.warn('admin reset persistence failed', e);
+  }
+  if (mp) mp.sendReset(seed);
+  resetWorldLocal(seed);
+}
+
+function showAdminButton() {
+  if (document.getElementById('admin-reset')) return;
+  const btn = document.createElement('button');
+  btn.id = 'admin-reset';
+  btn.textContent = '♻ Resetar mundo (admin)';
+  btn.style.cssText =
+    'position:fixed;top:12px;right:16px;z-index:55;font-family:monospace;font-size:13px;font-weight:700;' +
+    'background:#a11;color:#fff;border:1px solid #f55;border-radius:8px;padding:8px 12px;cursor:pointer';
+  btn.addEventListener('click', () => {
+    if (confirm('Resetar o mundo para TODOS? Isso apaga todas as construções e gera um mundo novo.')) {
+      adminResetWorld();
+    }
+  });
+  document.body.appendChild(btn);
+}
 
 /** Apply a block edit received from another player (no echo back).
  *  e.cx/e.cz are the chunk's WORLD offset (already multiples of 32). */
@@ -253,7 +297,7 @@ const onboarding = new Onboarding(async (profile) => {
 
   // Shared world: load (or create) its seed + everyone's saved builds.
   const seed = await loadOrCreateWorldSeed();
-  const persistence = new Persistence(world);
+  persistence = new Persistence(world);
   await persistence.loadInto();
   world.params.seed = seed;
 
@@ -276,7 +320,11 @@ const onboarding = new Onboarding(async (profile) => {
   weapon.multiplayer = mp;
   grenade.multiplayer = mp;
   mp.onExplode = (p) => grenade.feelExplosion(new THREE.Vector3(p.x, p.y, p.z));
+  mp.onWorldReset = (s) => resetWorldLocal(s);
   await mp.connect();
+
+  // Only the admin account sees the world-reset button.
+  if (profile.name === ADMIN_NAME) showAdminButton();
 
   player.position.set(0, 50, 0);
   player.velocity.set(0, 0, 0);

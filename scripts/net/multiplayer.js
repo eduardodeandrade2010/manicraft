@@ -20,6 +20,7 @@ export class Multiplayer {
     this.onRemoteEdit = null;
     this.onPlayerDown = null;
     this.onExplode = null;
+    this.onWorldReset = null;
     this._tmp = new THREE.Vector3();
     this._to = new THREE.Vector3();
 
@@ -60,6 +61,9 @@ export class Multiplayer {
     });
     ch.on('broadcast', { event: 'explode' }, ({ payload }) => {
       if (this.onExplode) this.onExplode(payload);
+    });
+    ch.on('broadcast', { event: 'reset' }, ({ payload }) => {
+      if (this.onWorldReset) this.onWorldReset(payload?.seed);
     });
     ch.on('presence', { event: 'sync' }, () => this.#sync());
     ch.on('presence', { event: 'leave' }, ({ leftPresences }) => {
@@ -126,6 +130,9 @@ export class Multiplayer {
   }
   sendExplode(pos) {
     this.channel?.send({ type: 'broadcast', event: 'explode', payload: { x: pos.x, y: pos.y, z: pos.z } });
+  }
+  sendReset(seed) {
+    this.channel?.send({ type: 'broadcast', event: 'reset', payload: { seed } });
   }
 
   update(dt) {

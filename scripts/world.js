@@ -26,8 +26,8 @@ export class World extends THREE.Group {
   params = {
     seed: 0,
     terrain: {
-      scale: 100,
-      magnitude: 8,
+      scale: 90,
+      magnitude: 12,
       offset: 6,
       waterOffset: 4
     },
